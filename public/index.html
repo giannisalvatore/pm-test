@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BTC 5m — Strategia Live (test)</title>
+<style>
+  :root { --bg:#0d1117; --card:#161b22; --line:#30363d; --txt:#e6edf3; --mut:#8b949e; --up:#2ea043; --down:#f85149; --warn:#d29922; --acc:#58a6ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:14px/1.4 -apple-system,Segoe UI,Roboto,sans-serif; padding:16px; }
+  h1 { font-size:18px; margin:0 0 12px; }
+  .muted { color:var(--mut); }
+  .grid { display:grid; gap:10px; }
+  .cards { grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); margin-bottom:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .card .lab { font-size:11px; color:var(--mut); text-transform:uppercase; letter-spacing:.04em; }
+  .card .val { font-size:20px; font-weight:600; margin-top:3px; }
+  .sec { font-size:12px; color:var(--mut); }
+  .pos { color:var(--up); } .neg { color:var(--down); } .acc { color:var(--acc); } .warn { color:var(--warn); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { padding:7px 9px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--mut); font-weight:500; font-size:11px; text-transform:uppercase; position:sticky; top:0; background:var(--bg); }
+  td.l,th.l { text-align:left; }
+  .pill { display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; border:1px solid var(--line); }
+  .pill.up { color:var(--up); border-color:var(--up); } .pill.down { color:var(--down); border-color:var(--down); }
+  .pill.lock { color:var(--acc); border-color:var(--acc); } .pill.wait { color:var(--mut); }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
+  .leg { font-size:12px; }
+  .tag { font-size:10px; color:var(--mut); }
+  .wrap { background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:auto; max-height:62vh; }
+</style>
+</head>
+<body>
+  <h1>BTC Up/Down 5m — Strategia Live <span class="muted" id="conn"></span></h1>
+
+  <!-- RIASSUNTO PERFORMANCE (chiusure) -->
+  <div class="grid cards" id="summary"></div>
+
+  <!-- STATO LIVE FINESTRA CORRENTE -->
+  <div class="grid cards" id="live"></div>
+
+  <!-- TABELLA -->
+  <div class="wrap">
+    <table>
+      <thead><tr>
+        <th class="l">Finestra</th><th>Price to beat</th><th>Prezzo ora</th><th>Distanza</th>
+        <th class="l">Entrata</th><th class="l">Sicurezza</th>
+        <th>Chiusura</th><th>Esito</th>
+        <th>Guad. min</th><th>Guad. max</th><th>Guad. reale</th><th class="l">Stato</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const f2 = (x) => x==null ? '—' : Number(x).toFixed(2);
+const money = (x) => x==null ? '—' : (x>=0?'+$':'-$') + Math.abs(x).toFixed(2);
+const cls = (x) => x==null ? '' : (x>=0?'pos':'neg');
+
+function leg(l){ if(!l) return '<span class="muted">—</span>';
+  const c = l.side==='Up'?'pill up':'pill down';
+  return `<span class="${c}">${l.side} @ ${f2(l.price)}</span> <span class="tag">${l.iso} · ${l.shares} sh</span>`;
+}
+
+function card(lab, val, sec){ return `<div class="card"><div class="lab">${lab}</div><div class="val">${val}</div>${sec?`<div class="sec">${sec}</div>`:''}</div>`; }
+
+async function load(){
+  let d; try { d = await (await fetch('/api/state')).json(); } catch(e){ return; }
+  const fe = d.feed, st = d.stats, p = d.params;
+
+  $('conn').innerHTML = `<span class="dot" style="background:${fe.connected?'var(--up)':'var(--down)'}"></span>` +
+    (fe.connected?'connesso':'disconnesso') + ` · soglia < ${p.thresh} · banda ±${p.band}$ · entrata solo primi ${p.entryMaxRel}s`;
+
+  // RIASSUNTO (in base alle chiusure)
+  $('summary').innerHTML =
+    card('Realizzato (chiuse)', `<span class="${cls(st.realized)}">${money(st.realized)}</span>`, `${st.played} finestre giocate`) +
+    card('Lock completati', st.locks, 'entrambe le gambe') +
+    card('Nude vinte', `<span class="pos">${st.nudeWin}</span>`, 'una gamba, vinta') +
+    card('Nude perse', `<span class="neg">${st.nudeLose}</span>`, 'una gamba, persa (−$1)') +
+    card('Win rate', st.played? Math.round(100*(st.locks+st.nudeWin)/st.played)+'%':'—', 'lock+nude vinte / giocate');
+
+  // STATO LIVE
+  const within = fe.priceToBeat!=null && fe.currentPrice!=null && Math.abs(fe.currentPrice-fe.priceToBeat)<=p.band;
+  const dist = (fe.priceToBeat!=null && fe.currentPrice!=null) ? (fe.currentPrice-fe.priceToBeat) : null;
+  $('live').innerHTML =
+    card('Price to beat', f2(fe.priceToBeat), fe.priceToBeatReliable?'affidabile':'<span class="warn">mid-finestra ⚠</span>') +
+    card('Prezzo ora', f2(fe.currentPrice), dist!=null?`distanza ${dist>=0?'+':''}${f2(dist)}$ · <span class="${within?'pos':'muted'}">${within?'in banda ✓':'fuori banda'}</span>`:'') +
+    card('UP ask', f2(fe.upAsk), `<span class="${fe.upAsk!=null&&fe.upAsk<p.thresh?'pos':'muted'}">${fe.upAsk!=null&&fe.upAsk<p.thresh?'< '+p.thresh+' ✓':''}</span>`) +
+    card('DOWN ask', f2(fe.downAsk), `<span class="${fe.downAsk!=null&&fe.downAsk<p.thresh?'pos':'muted'}">${fe.downAsk!=null&&fe.downAsk<p.thresh?'< '+p.thresh+' ✓':''}</span>`);
+
+  // TABELLA
+  $('rows').innerHTML = d.windows.map(w=>{
+    const entrata = w.legs.find(l=>l.kind==='entrata');
+    const sicur = w.legs.find(l=>l.kind==='sicurezza');
+    let stPill = 'pill wait';
+    if(w.status.includes('lock')) stPill='pill lock';
+    return `<tr>
+      <td class="l">${w.iso}${w.priceToBeatReliable?'':' <span class="tag warn">⚠</span>'}</td>
+      <td>${f2(w.priceToBeat)}</td>
+      <td>${f2(w.lastPrice)}</td>
+      <td class="${w.distance!=null&&Math.abs(w.distance)<=p.band?'acc':'muted'}">${w.distance==null?'—':(w.distance>=0?'+':'')+f2(w.distance)}</td>
+      <td class="l leg">${leg(entrata)}</td>
+      <td class="l leg">${leg(sicur)}</td>
+      <td>${f2(w.closePrice)}</td>
+      <td>${w.outcome?`<span class="pill ${w.outcome==='Up'?'up':'down'}">${w.outcome}</span>`:'—'}</td>
+      <td class="${cls(w.legs.length?w.minGain:null)}">${w.legs.length?money(w.minGain):'—'}</td>
+      <td class="${cls(w.legs.length?w.maxGain:null)}">${w.legs.length?money(w.maxGain):'—'}</td>
+      <td class="${cls(w.actualGain)}"><b>${w.actualGain==null?'—':money(w.actualGain)}</b></td>
+      <td class="l"><span class="${stPill}">${w.status}</span></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="12" class="l muted">in attesa di dati…</td></tr>';
+}
+load(); setInterval(load, 1000);
+</script>
+</body>
+</html>
