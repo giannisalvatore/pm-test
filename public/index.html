@@ -94,7 +94,7 @@ async function load(){
   const fe = d.feed, st = d.stats, p = d.params;
 
   $('conn').innerHTML = `<span class="dot" style="background:${fe.connected?'var(--up)':'var(--down)'}"></span>` +
-    (fe.connected?'connesso':'disconnesso') + ` · soglia < ${p.thresh} · banda ±${p.band}$ · entrata solo primi ${p.entryMaxRel}s`;
+    (fe.connected?'connesso':'disconnesso') + ` · $${p.stake}/posizione · soglia < ${p.thresh} · banda ±${p.band}$ · entrata primi ${p.entryMaxRel}s`;
 
   // RIASSUNTO (in base alle chiusure)
   $('summary').innerHTML =

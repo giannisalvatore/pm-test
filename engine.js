@@ -22,6 +22,7 @@ const WIN = 300;
 const BAND = 15;
 const THRESH = 0.43;
 const ENTRY_MAX_REL = 150; // entrata (1ª gamba) solo nei primi 2,5 min; dopo non si entra
+const STAKE = Number(process.env.STAKE) || 1; // $ per posizione (paper=1; prod: STAKE=10)
 
 const windows = new Map(); // s -> record
 let currentS = null;
@@ -30,7 +31,7 @@ let currentS = null;
 for (const w of db.load()) windows.set(w.s, w);
 
 function computeGains(w) {
-  const spent = w.legs.length; // $1 per gamba
+  const spent = w.legs.length * STAKE; // $ totali messi (STAKE per gamba)
   let shUp = 0, shDown = 0;
   for (const l of w.legs) { if (l.side === 'Up') shUp += l.shares; else shDown += l.shares; }
   w.gainIfUp = +(shUp - spent).toFixed(3);
@@ -60,7 +61,7 @@ function finalize(w) {
 
 function buy(w, side, price, kind, f) {
   if (price == null || price <= 0) return;
-  w.legs.push({ side, price: +price.toFixed(3), shares: +(1 / price).toFixed(3), kind, t: Date.now(), priceAtBuy: f.currentPrice });
+  w.legs.push({ side, price: +price.toFixed(3), shares: +(STAKE / price).toFixed(3), kind, t: Date.now(), priceAtBuy: f.currentPrice });
   computeGains(w);
   setStatus(w);
   db.save(w); // persisti subito l'acquisto
@@ -154,4 +155,4 @@ async function reconcile() {
 }
 reconcile();
 
-module.exports = { onFeed, snapshot, stats, BAND, THRESH, ENTRY_MAX_REL };
+module.exports = { onFeed, snapshot, stats, BAND, THRESH, ENTRY_MAX_REL, STAKE };
