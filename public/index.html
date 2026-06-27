@@ -28,6 +28,23 @@
   .leg { font-size:12px; }
   .tag { font-size:10px; color:var(--mut); }
   .wrap { background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:auto; max-height:62vh; }
+  /* MOBILE: card per ciclo 5m */
+  .cards-list { display:none; }
+  .cyc { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .cyc-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .cyc-head .t { font-size:16px; font-weight:700; }
+  .cyc-row { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:13px; padding:4px 0; }
+  .cyc-row .k { color:var(--mut); }
+  .cyc-gain { margin-top:6px; padding-top:8px; border-top:1px solid var(--line); display:flex; justify-content:space-between; align-items:flex-start; }
+  .cyc-gain .big { font-size:22px; font-weight:700; }
+  .cyc-gain .r { text-align:right; }
+  @media (max-width:700px){
+    body { padding:10px; }
+    h1 { font-size:15px; }
+    .wrap { display:none; }            /* niente tabella su mobile */
+    .cards-list { display:grid; gap:10px; }
+    .cards { grid-template-columns:repeat(2,1fr); }
+  }
 </style>
 </head>
 <body>
@@ -52,6 +69,9 @@
     </table>
   </div>
 
+  <!-- MOBILE: card per ciclo -->
+  <div class="cards-list" id="cardrows"></div>
+
 <script>
 const $ = (id) => document.getElementById(id);
 const f2 = (x) => x==null ? '—' : Number(x).toFixed(2);
@@ -61,6 +81,10 @@ const cls = (x) => x==null ? '' : (x>=0?'pos':'neg');
 function leg(l){ if(!l) return '<span class="muted">—</span>';
   const c = l.side==='Up'?'pill up':'pill down';
   return `<span class="${c}">${l.side} @ ${f2(l.price)}</span> <span class="tag">${l.iso} · ${l.shares} sh</span>`;
+}
+function legMobile(l){ if(!l) return '<span class="muted">—</span>';
+  const c = l.side==='Up'?'pill up':'pill down';
+  return `<span class="${c}">${l.side} @ ${f2(l.price)}</span> <span class="tag">${l.iso}</span>`;
 }
 
 function card(lab, val, sec){ return `<div class="card"><div class="lab">${lab}</div><div class="val">${val}</div>${sec?`<div class="sec">${sec}</div>`:''}</div>`; }
@@ -110,6 +134,31 @@ async function load(){
       <td class="l"><span class="${stPill}">${w.status}</span></td>
     </tr>`;
   }).join('') || '<tr><td colspan="12" class="l muted">in attesa di dati…</td></tr>';
+
+  // CARD MOBILE (una per ciclo, solo info essenziali)
+  $('cardrows').innerHTML = d.windows.map(w=>{
+    const entrata = w.legs.find(l=>l.kind==='entrata');
+    const sicur = w.legs.find(l=>l.kind==='sicurezza');
+    const closed = w.outcome!=null;
+    let stPill='pill wait'; if(w.status.includes('lock'))stPill='pill lock';
+    return `<div class="cyc">
+      <div class="cyc-head">
+        <span class="t">${w.iso}${w.priceToBeatReliable?'':' ⚠'}</span>
+        <span class="${stPill}">${w.status}</span>
+        ${w.outcome?`<span class="pill ${w.outcome==='Up'?'up':'down'}" style="margin-left:auto">${w.outcome}</span>`:''}
+      </div>
+      <div class="cyc-row"><span class="k">Entrata</span><span>${legMobile(entrata)}</span></div>
+      <div class="cyc-row"><span class="k">Sicurezza</span><span>${legMobile(sicur)}</span></div>
+      <div class="cyc-row"><span class="k">Beat → ${closed?'chiusura':'ora'}</span><span class="tag">${f2(w.priceToBeat)} → ${f2(closed?w.closePrice:w.lastPrice)}</span></div>
+      <div class="cyc-gain">
+        <span class="k">${closed?'Guadagno reale':'Potenziale'}</span>
+        <span class="r">
+          ${closed?`<span class="big ${cls(w.actualGain)}">${money(w.actualGain)}</span>`:'<span class="big muted">in corso</span>'}
+          <div class="tag">min ${money(w.minGain)} · max ${money(w.maxGain)}</div>
+        </span>
+      </div>
+    </div>`;
+  }).join('') || '<div class="muted">in attesa di dati…</div>';
 }
 load(); setInterval(load, 1000);
 </script>
