@@ -21,7 +21,6 @@ const db = require('./db');
 const WIN = 300;
 const BAND = 10;
 const THRESH = 0.43;
-const ENTRY_MIN_REL = 60;  // entrata SOLO dopo 1 min: lascia che il mercato mostri dove va
 const ENTRY_MAX_REL = 150; // entrata (1ª gamba) solo entro 2,5 min; dopo non si entra
 const STAKE = Number(process.env.STAKE) || 1; // $ per posizione (paper=1; prod: STAKE=10)
 
@@ -85,13 +84,19 @@ function onFeed(f) {
     w = { s: f.windowStart, priceToBeat: f.priceToBeat, priceToBeatReliable: f.priceToBeatReliable,
       legs: [], lastPrice: f.currentPrice, lastUpAsk: null, lastDownAsk: null,
       closePrice: null, outcome: null, status: 'attesa',
-      gainIfUp: 0, gainIfDown: 0, minGain: 0, maxGain: 0, actualGain: null, upMin: null, downMin: null, createdAt: Date.now() };
+      gainIfUp: 0, gainIfDown: 0, minGain: 0, maxGain: 0, actualGain: null, upMin: null, downMin: null, maxDev: null, createdAt: Date.now() };
     windows.set(f.windowStart, w);
   }
   // prendi sempre il price-to-beat affidabile (valore esatto al bordo dal buffer)
   if (f.priceToBeatReliable && f.priceToBeat != null) { w.priceToBeat = f.priceToBeat; w.priceToBeatReliable = true; }
   else if (w.priceToBeat == null && f.priceToBeat != null) { w.priceToBeat = f.priceToBeat; }
   w.lastPrice = f.currentPrice; w.lastUpAsk = f.upAsk; w.lastDownAsk = f.downAsk;
+
+  // FILTRO range-bound: massima escursione dal target dall'apertura. Se "rompe" la banda -> trend -> scartata.
+  if (w.priceToBeat != null && f.currentPrice != null) {
+    const dev = Math.abs(f.currentPrice - w.priceToBeat);
+    if (w.maxDev == null || dev > w.maxDev) w.maxDev = dev;
+  }
 
   // traccia il MINIMO ask di ENTRAMBI i lati durante la finestra (sempre, 1 o 2 gambe)
   if (f.oddsWindow === f.windowStart) {
@@ -102,12 +107,12 @@ function onFeed(f) {
   // strategia: solo con price-to-beat affidabile E quote del CICLO CORRENTE (no quote stantie)
   const oddsOk = f.oddsWindow === f.windowStart && f.upAsk != null && f.downAsk != null;
   if (w.priceToBeatReliable && w.priceToBeat != null && f.currentPrice != null && oddsOk) {
-    const within = Math.abs(f.currentPrice - w.priceToBeat) <= BAND;
     const rel = Math.floor((f.lastTs || Date.now()) / 1000) - f.windowStart; // secondi dentro la finestra
     const haveUp = w.legs.some((l) => l.side === 'Up');
     const haveDown = w.legs.some((l) => l.side === 'Down');
-    // entrata SOLO tra 30s e 150s: aspetta 30s per vedere dove va il mercato
-    if (w.legs.length === 0 && within && rel >= ENTRY_MIN_REL && rel <= ENTRY_MAX_REL) {
+    // FILTRO range-bound: entra solo se il prezzo NON è MAI uscito da ±BAND dal target (mai un trend)
+    const rangeBound = w.maxDev != null && w.maxDev <= BAND;
+    if (w.legs.length === 0 && rangeBound && rel <= ENTRY_MAX_REL) {
       if (f.upAsk != null && f.upAsk < THRESH) buy(w, 'Up', f.upAsk, 'entrata', f);
       else if (f.downAsk != null && f.downAsk < THRESH) buy(w, 'Down', f.downAsk, 'entrata', f);
     } else if (w.legs.length === 1) {
@@ -167,4 +172,4 @@ reconcile();
 // azzera tutto: posizioni in memoria + DB (per ripartire con dati puliti)
 function reset() { windows.clear(); currentS = null; db.clear(); }
 
-module.exports = { onFeed, snapshot, stats, reset, BAND, THRESH, ENTRY_MIN_REL, ENTRY_MAX_REL, STAKE };
+module.exports = { onFeed, snapshot, stats, reset, BAND, THRESH, ENTRY_MAX_REL, STAKE };
