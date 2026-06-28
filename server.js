@@ -25,7 +25,7 @@ const server = http.createServer((req, res) => {
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({
       feed: feeds.state,
-      params: { band: engine.BAND, thresh: engine.THRESH, entryMaxRel: engine.ENTRY_MAX_REL, stake: engine.STAKE },
+      params: { band: engine.BAND, thresh: engine.THRESH, rvMin: engine.RV_MIN, entryMaxRel: engine.ENTRY_MAX_REL, stake: engine.STAKE },
       windows: engine.snapshot(),
       stats: engine.stats(),
     }));

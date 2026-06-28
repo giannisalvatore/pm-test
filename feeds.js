@@ -21,6 +21,7 @@ const state = {
   windowStart: null, priceToBeat: null, priceToBeatReliable: false,
   upAsk: null, upBid: null, downAsk: null, downBid: null, oddsTs: null,
   oddsWindow: null,
+  rv15: null, // volatilita' realizzata ultimi 15 min ($) — segnale di "finestra oscillante"
 };
 
 const buffer = new Map(); // ts(ms) -> value (prezzo Chainlink)
@@ -41,6 +42,20 @@ function priceAt(tsMs) {
   let best = null, bestDiff = Infinity;
   for (const [ts, v] of buffer) { const d = Math.abs(ts - tsMs); if (d <= TOL && d < bestDiff) { bestDiff = d; best = v; } }
   return best;
+}
+
+// volatilita' realizzata sugli ultimi `ms`: sqrt(somma dei (delta tra tick consecutivi)^2).
+// Serve copertura sufficiente del periodo, altrimenti null (non si filtra finche' non c'e' storia).
+function realizedVol(ms) {
+  const now = state.lastTs || Date.now();
+  const cutoff = now - ms;
+  const pts = [];
+  for (const [ts, v] of buffer) if (ts >= cutoff && typeof v === 'number') pts.push([ts, v]);
+  if (pts.length < (ms / 1000) * 0.5) return null; // serve almeno ~meta' dei secondi
+  pts.sort((a, b) => a[0] - b[0]);
+  let sq = 0;
+  for (let i = 1; i < pts.length; i++) { const d = pts[i][1] - pts[i - 1][1]; sq += d * d; }
+  return Math.sqrt(sq);
 }
 
 // ---------------- WebSocket PREZZO (Chainlink RTDS) ----------------
@@ -79,6 +94,7 @@ function recompute() {
   state.windowStart = s;
   const ptb = priceAt(s * 1000);
   if (ptb != null) { state.priceToBeat = ptb; state.priceToBeatReliable = true; } else state.priceToBeatReliable = false;
+  state.rv15 = realizedVol(15 * 60 * 1000); // segnale di volatilita' recente (null finche' manca storia)
 }
 
 // ---------------- token della finestra (Gamma) ----------------

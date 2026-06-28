@@ -7,7 +7,7 @@
  *   THRESH = 0.43 -> compro un lato solo se il suo ASK < 0.43
  *   $1 per posizione -> shares = 1/prezzo. Payout del lato vincente = shares * $1.
  *
- *   1) ENTRATA: nessuna posizione + dentro la banda + un lato < 0.43 -> compro $1 su quel lato.
+ *   1) ENTRATA: nessuna posizione + regime VOLATILE (rv15 >= RV_MIN) + un lato < 0.43 -> compro $1 su quel lato.
  *   2) SICUREZZA: ho 1 lato + l'ALTRO va < 0.43 -> compro $1 anche sull'altro (lock).
  *
  * Guadagno: se chiude UP paga il lato UP, se chiude DOWN paga il lato DOWN.
@@ -19,9 +19,10 @@ const feeds = require('./feeds');
 const db = require('./db');
 
 const WIN = 300;
-const BAND = 10;
+const BAND = 10;           // solo per il display "in banda" (distanza dal target); non gate d'entrata
 const THRESH = 0.43;
-const MIN_OBS = 30;        // il prezzo deve restare range-bound per ALMENO 30s prima di poter entrare
+const RV_MIN = Number(process.env.RV_MIN) || 110; // FILTRO VOLATILITA': entra solo se rv15 (vol ultimi 15m) >= soglia.
+                                                  // Backtest 90gg: porta il lock-rate da ~54% (perde) a ~70% (pareggio/positivo).
 const ENTRY_MAX_REL = 150; // entrata (1ª gamba) solo entro 2,5 min; dopo non si entra
 const STAKE = Number(process.env.STAKE) || 1; // $ per posizione (paper=1; prod: STAKE=10)
 
@@ -85,7 +86,7 @@ function onFeed(f) {
     w = { s: f.windowStart, priceToBeat: f.priceToBeat, priceToBeatReliable: f.priceToBeatReliable,
       legs: [], lastPrice: f.currentPrice, lastUpAsk: null, lastDownAsk: null,
       closePrice: null, outcome: null, status: 'attesa',
-      gainIfUp: 0, gainIfDown: 0, minGain: 0, maxGain: 0, actualGain: null, upMin: null, downMin: null, calmStart: null, createdAt: Date.now() };
+      gainIfUp: 0, gainIfDown: 0, minGain: 0, maxGain: 0, actualGain: null, upMin: null, downMin: null, createdAt: Date.now() };
     windows.set(f.windowStart, w);
   }
   // prendi sempre il price-to-beat affidabile (valore esatto al bordo dal buffer)
@@ -94,13 +95,6 @@ function onFeed(f) {
   w.lastPrice = f.currentPrice; w.lastUpAsk = f.upAsk; w.lastDownAsk = f.downAsk;
 
   const rel = Math.floor((f.lastTs || Date.now()) / 1000) - f.windowStart; // secondi dentro la finestra
-  // FILTRO range-bound ROLLING: da quanti secondi il prezzo è CONTINUAMENTE entro ±BAND dal target.
-  // Se esce (breakout) la striscia si azzera; se rientra riparte da capo (altra chance di stabilizzarsi).
-  if (w.priceToBeat != null && f.currentPrice != null) {
-    const dev = Math.abs(f.currentPrice - w.priceToBeat);
-    if (dev <= BAND) { if (w.calmStart == null) w.calmStart = rel; }
-    else w.calmStart = null;
-  }
 
   // traccia il MINIMO ask di ENTRAMBI i lati durante la finestra (sempre, 1 o 2 gambe)
   if (f.oddsWindow === f.windowStart) {
@@ -113,9 +107,9 @@ function onFeed(f) {
   if (w.priceToBeatReliable && w.priceToBeat != null && f.currentPrice != null && oddsOk) {
     const haveUp = w.legs.some((l) => l.side === 'Up');
     const haveDown = w.legs.some((l) => l.side === 'Down');
-    // entra solo se range-bound CONTINUO da almeno MIN_OBS secondi (la striscia si azzera ai breakout)
-    const calmDur = w.calmStart != null ? (rel - w.calmStart) : -1;
-    if (w.legs.length === 0 && calmDur >= MIN_OBS && rel <= ENTRY_MAX_REL) {
+    // FILTRO: entra solo in regime VOLATILE — finestre con alta vol recente oscillano di piu' (-> lock).
+    const volOk = f.rv15 != null && f.rv15 >= RV_MIN;
+    if (w.legs.length === 0 && volOk && rel <= ENTRY_MAX_REL) {
       if (f.upAsk != null && f.upAsk < THRESH) buy(w, 'Up', f.upAsk, 'entrata', f);
       else if (f.downAsk != null && f.downAsk < THRESH) buy(w, 'Down', f.downAsk, 'entrata', f);
     } else if (w.legs.length === 1) {
@@ -175,4 +169,4 @@ reconcile();
 // azzera tutto: posizioni in memoria + DB (per ripartire con dati puliti)
 function reset() { windows.clear(); currentS = null; db.clear(); }
 
-module.exports = { onFeed, snapshot, stats, reset, BAND, THRESH, ENTRY_MAX_REL, STAKE };
+module.exports = { onFeed, snapshot, stats, reset, BAND, THRESH, RV_MIN, ENTRY_MAX_REL, STAKE };

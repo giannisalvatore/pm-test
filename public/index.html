@@ -94,7 +94,7 @@ async function load(){
   const fe = d.feed, st = d.stats, p = d.params;
 
   $('conn').innerHTML = `<span class="dot" style="background:${fe.connected?'var(--up)':'var(--down)'}"></span>` +
-    (fe.connected?'connesso':'disconnesso') + ` · $${p.stake}/posizione · soglia < ${p.thresh} · banda ±${p.band}$ · entrata primi ${p.entryMaxRel}s`;
+    (fe.connected?'connesso':'disconnesso') + ` · $${p.stake}/posizione · soglia < ${p.thresh} · vol min ${p.rvMin}$ · entrata primi ${p.entryMaxRel}s`;
 
   // RIASSUNTO (in base alle chiusure)
   $('summary').innerHTML =
@@ -111,7 +111,8 @@ async function load(){
     card('Price to beat', f2(fe.priceToBeat), fe.priceToBeatReliable?'affidabile':'<span class="warn">mid-finestra ⚠</span>') +
     card('Prezzo ora', f2(fe.currentPrice), dist!=null?`distanza ${dist>=0?'+':''}${f2(dist)}$ · <span class="${within?'pos':'muted'}">${within?'in banda ✓':'fuori banda'}</span>`:'') +
     card('UP ask', f2(fe.upAsk), `<span class="${fe.upAsk!=null&&fe.upAsk<p.thresh?'pos':'muted'}">${fe.upAsk!=null&&fe.upAsk<p.thresh?'< '+p.thresh+' ✓':''}</span>`) +
-    card('DOWN ask', f2(fe.downAsk), `<span class="${fe.downAsk!=null&&fe.downAsk<p.thresh?'pos':'muted'}">${fe.downAsk!=null&&fe.downAsk<p.thresh?'< '+p.thresh+' ✓':''}</span>`);
+    card('DOWN ask', f2(fe.downAsk), `<span class="${fe.downAsk!=null&&fe.downAsk<p.thresh?'pos':'muted'}">${fe.downAsk!=null&&fe.downAsk<p.thresh?'< '+p.thresh+' ✓':''}</span>`) +
+    card('Vol 15m', fe.rv15!=null?('$'+f2(fe.rv15)):'<span class="muted">—</span>', fe.rv15!=null?`<span class="${fe.rv15>=p.rvMin?'pos':'warn'}">${fe.rv15>=p.rvMin?'volatile ✓ (entra)':'troppo calmo (no entry)'}</span> · min ${p.rvMin}$`:'in attesa di storia');
 
   // TABELLA
   $('rows').innerHTML = d.windows.map(w=>{
