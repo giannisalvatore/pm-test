@@ -61,7 +61,7 @@
     <table>
       <thead><tr>
         <th class="l">Finestra</th><th>Price to beat</th><th>Prezzo ora</th><th>Distanza</th>
-        <th class="l">Entrata</th><th class="l">Sicurezza</th><th>Opp. min</th>
+        <th class="l">Entrata</th><th class="l">Sicurezza</th><th>Up min</th><th>Down min</th>
         <th>Chiusura</th><th>Esito</th>
         <th>Guad. min</th><th>Guad. max</th><th>Guad. reale</th><th class="l">Stato</th>
       </tr></thead>
@@ -126,7 +126,8 @@ async function load(){
       <td class="${w.distance!=null&&Math.abs(w.distance)<=p.band?'acc':'muted'}">${w.distance==null?'—':(w.distance>=0?'+':'')+f2(w.distance)}</td>
       <td class="l leg">${leg(entrata)}</td>
       <td class="l leg">${leg(sicur)}</td>
-      <td class="${w.otherMin!=null&&w.otherMin<=p.thresh?'pos':'warn'}">${w.otherSide&&w.otherMin!=null?w.otherSide+' '+f2(w.otherMin):'—'}</td>
+      <td class="${w.upMin!=null&&w.upMin<=p.thresh?'pos':'warn'}">${w.upMin!=null?f2(w.upMin):'—'}</td>
+      <td class="${w.downMin!=null&&w.downMin<=p.thresh?'pos':'warn'}">${w.downMin!=null?f2(w.downMin):'—'}</td>
       <td>${f2(w.closePrice)}</td>
       <td>${w.outcome?`<span class="pill ${w.outcome==='Up'?'up':'down'}">${w.outcome}</span>`:'—'}</td>
       <td class="${cls(w.legs.length?w.minGain:null)}">${w.legs.length?money(w.minGain):'—'}</td>
@@ -134,7 +135,7 @@ async function load(){
       <td class="${cls(w.actualGain)}"><b>${w.actualGain==null?'—':money(w.actualGain)}</b></td>
       <td class="l"><span class="${stPill}">${w.status}</span></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="13" class="l muted">in attesa di dati…</td></tr>';
+  }).join('') || '<tr><td colspan="14" class="l muted">in attesa di dati…</td></tr>';
 
   // CARD MOBILE (una per ciclo, solo info essenziali)
   $('cardrows').innerHTML = d.windows.map(w=>{
@@ -150,7 +151,7 @@ async function load(){
       </div>
       <div class="cyc-row"><span class="k">Entrata</span><span>${legMobile(entrata)}</span></div>
       <div class="cyc-row"><span class="k">Sicurezza</span><span>${legMobile(sicur)}</span></div>
-      <div class="cyc-row"><span class="k">Opp. min${w.otherSide?' ('+w.otherSide+')':''}</span><span class="${w.otherMin!=null&&w.otherMin<=d.params.thresh?'pos':'warn'}">${w.otherMin!=null?f2(w.otherMin):'—'}</span></div>
+      <div class="cyc-row"><span class="k">Min ask</span><span>Up <span class="${w.upMin!=null&&w.upMin<=d.params.thresh?'pos':'warn'}">${w.upMin!=null?f2(w.upMin):'—'}</span> · Down <span class="${w.downMin!=null&&w.downMin<=d.params.thresh?'pos':'warn'}">${w.downMin!=null?f2(w.downMin):'—'}</span></span></div>
       <div class="cyc-row"><span class="k">Beat → ${closed?'chiusura':'ora'}</span><span class="tag">${f2(w.priceToBeat)} → ${f2(closed?w.closePrice:w.lastPrice)}</span></div>
       <div class="cyc-gain">
         <span class="k">${closed?'Guadagno reale':'Potenziale'}</span>
