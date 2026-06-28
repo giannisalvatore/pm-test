@@ -15,6 +15,12 @@ feeds.start();
 const INDEX = path.join(__dirname, 'public', 'index.html');
 
 const server = http.createServer((req, res) => {
+  if (req.url.startsWith('/api/reset')) {
+    engine.reset();
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ ok: true, message: 'DB azzerato — riparto con dati puliti' }));
+    return;
+  }
   if (req.url.startsWith('/api/state')) {
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify({

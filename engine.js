@@ -19,9 +19,10 @@ const feeds = require('./feeds');
 const db = require('./db');
 
 const WIN = 300;
-const BAND = 15;
+const BAND = 10;
 const THRESH = 0.43;
-const ENTRY_MAX_REL = 150; // entrata (1ª gamba) solo nei primi 2,5 min; dopo non si entra
+const ENTRY_MIN_REL = 30;  // entrata SOLO dopo 30s: lascia che il mercato mostri dove va
+const ENTRY_MAX_REL = 150; // entrata (1ª gamba) solo entro 2,5 min; dopo non si entra
 const STAKE = Number(process.env.STAKE) || 1; // $ per posizione (paper=1; prod: STAKE=10)
 
 const windows = new Map(); // s -> record
@@ -105,7 +106,8 @@ function onFeed(f) {
     const rel = Math.floor((f.lastTs || Date.now()) / 1000) - f.windowStart; // secondi dentro la finestra
     const haveUp = w.legs.some((l) => l.side === 'Up');
     const haveDown = w.legs.some((l) => l.side === 'Down');
-    if (w.legs.length === 0 && within && rel <= ENTRY_MAX_REL) {
+    // entrata SOLO tra 30s e 150s: aspetta 30s per vedere dove va il mercato
+    if (w.legs.length === 0 && within && rel >= ENTRY_MIN_REL && rel <= ENTRY_MAX_REL) {
       if (f.upAsk != null && f.upAsk < THRESH) buy(w, 'Up', f.upAsk, 'entrata', f);
       else if (f.downAsk != null && f.downAsk < THRESH) buy(w, 'Down', f.downAsk, 'entrata', f);
     } else if (w.legs.length === 1) {
@@ -162,4 +164,7 @@ async function reconcile() {
 }
 reconcile();
 
-module.exports = { onFeed, snapshot, stats, BAND, THRESH, ENTRY_MAX_REL, STAKE };
+// azzera tutto: posizioni in memoria + DB (per ripartire con dati puliti)
+function reset() { windows.clear(); currentS = null; db.clear(); }
+
+module.exports = { onFeed, snapshot, stats, reset, BAND, THRESH, ENTRY_MIN_REL, ENTRY_MAX_REL, STAKE };

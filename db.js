@@ -51,4 +51,6 @@ function load() {
   }));
 }
 
-module.exports = { save, load };
+function clear() { db.exec('DELETE FROM windows'); }
+
+module.exports = { save, load, clear };
