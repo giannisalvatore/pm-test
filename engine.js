@@ -21,7 +21,7 @@ const db = require('./db');
 const WIN = 300;
 const BAND = 10;
 const THRESH = 0.43;
-const ENTRY_MIN_REL = 30;  // entrata SOLO dopo 30s: lascia che il mercato mostri dove va
+const ENTRY_MIN_REL = 60;  // entrata SOLO dopo 1 min: lascia che il mercato mostri dove va
 const ENTRY_MAX_REL = 150; // entrata (1ª gamba) solo entro 2,5 min; dopo non si entra
 const STAKE = Number(process.env.STAKE) || 1; // $ per posizione (paper=1; prod: STAKE=10)
 
