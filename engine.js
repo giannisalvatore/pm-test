@@ -21,6 +21,7 @@ const db = require('./db');
 const WIN = 300;
 const BAND = 10;
 const THRESH = 0.43;
+const MIN_OBS = 60;        // il prezzo deve restare range-bound per ALMENO 60s prima di poter entrare
 const ENTRY_MAX_REL = 150; // entrata (1ª gamba) solo entro 2,5 min; dopo non si entra
 const STAKE = Number(process.env.STAKE) || 1; // $ per posizione (paper=1; prod: STAKE=10)
 
@@ -110,9 +111,9 @@ function onFeed(f) {
     const rel = Math.floor((f.lastTs || Date.now()) / 1000) - f.windowStart; // secondi dentro la finestra
     const haveUp = w.legs.some((l) => l.side === 'Up');
     const haveDown = w.legs.some((l) => l.side === 'Down');
-    // FILTRO range-bound: entra solo se il prezzo NON è MAI uscito da ±BAND dal target (mai un trend)
+    // FILTRO range-bound: prezzo MAI uscito da ±BAND (mai trend) E osservato per almeno MIN_OBS secondi
     const rangeBound = w.maxDev != null && w.maxDev <= BAND;
-    if (w.legs.length === 0 && rangeBound && rel <= ENTRY_MAX_REL) {
+    if (w.legs.length === 0 && rangeBound && rel >= MIN_OBS && rel <= ENTRY_MAX_REL) {
       if (f.upAsk != null && f.upAsk < THRESH) buy(w, 'Up', f.upAsk, 'entrata', f);
       else if (f.downAsk != null && f.downAsk < THRESH) buy(w, 'Down', f.downAsk, 'entrata', f);
     } else if (w.legs.length === 1) {
