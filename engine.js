@@ -21,7 +21,7 @@ const db = require('./db');
 const WIN = 300;
 const BAND = 10;
 const THRESH = 0.43;
-const MIN_OBS = 60;        // il prezzo deve restare range-bound per ALMENO 60s prima di poter entrare
+const MIN_OBS = 30;        // il prezzo deve restare range-bound per ALMENO 30s prima di poter entrare
 const ENTRY_MAX_REL = 150; // entrata (1ª gamba) solo entro 2,5 min; dopo non si entra
 const STAKE = Number(process.env.STAKE) || 1; // $ per posizione (paper=1; prod: STAKE=10)
 
