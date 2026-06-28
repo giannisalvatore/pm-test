@@ -57,4 +57,19 @@ for (const [lo, hi] of [[0.43, 0.45], [0.45, 0.47], [0.47, 0.50], [0.50, 0.55], 
   const n = miss.filter((x) => x >= lo && x < hi).length;
   console.log(`  ${lo.toFixed(2)}-${hi.toFixed(2)}: ${String(n).padStart(3)} nude  ${'#'.repeat(Math.min(n, 60))}`);
 }
+console.log('\n=== SIMULAZIONE NETTO a soglie diverse (dai min reali) ===');
+console.log('(lock=entrambi i min<X · naked=un solo lato · skip=nessuno entra · lock~1/X-2 CONSERVATIVO, reale un po meglio)');
+for (const X of [0.30, 0.33, 0.35, 0.40, 0.43, 0.45, 0.47]) {
+  let lk = 0, nk = 0, sk = 0;
+  for (const r of rows) {
+    if (r.upMin == null || r.downMin == null) continue;
+    const u = r.upMin < X, d = r.downMin < X;
+    if (u && d) lk++; else if (u || d) nk++; else sk++;
+  }
+  const lockProfit = 1 / X - 2;
+  const net = lk * lockProfit - nk;
+  const entered = lk + nk;
+  const revPct = entered ? (100 * lk / entered) : 0;
+  console.log(`  X=${X.toFixed(2)}: lock ${String(lk).padStart(3)} nude ${String(nk).padStart(3)} skip ${String(sk).padStart(2)} | reversione ${revPct.toFixed(0).padStart(2)}% | lock~+$${lockProfit.toFixed(2)} | NETTO ~$${net.toFixed(0)}`);
+}
 console.log('\n(soglia/banda/tempo dove "reversione > pareggio" = configurazione profittevole)');
