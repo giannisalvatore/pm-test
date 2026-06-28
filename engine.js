@@ -84,13 +84,19 @@ function onFeed(f) {
     w = { s: f.windowStart, priceToBeat: f.priceToBeat, priceToBeatReliable: f.priceToBeatReliable,
       legs: [], lastPrice: f.currentPrice, lastUpAsk: null, lastDownAsk: null,
       closePrice: null, outcome: null, status: 'attesa',
-      gainIfUp: 0, gainIfDown: 0, minGain: 0, maxGain: 0, actualGain: null, createdAt: Date.now() };
+      gainIfUp: 0, gainIfDown: 0, minGain: 0, maxGain: 0, actualGain: null, otherMin: null, createdAt: Date.now() };
     windows.set(f.windowStart, w);
   }
   // prendi sempre il price-to-beat affidabile (valore esatto al bordo dal buffer)
   if (f.priceToBeatReliable && f.priceToBeat != null) { w.priceToBeat = f.priceToBeat; w.priceToBeatReliable = true; }
   else if (w.priceToBeat == null && f.priceToBeat != null) { w.priceToBeat = f.priceToBeat; }
   w.lastPrice = f.currentPrice; w.lastUpAsk = f.upAsk; w.lastDownAsk = f.downAsk;
+
+  // traccia il MINIMO del lato OPPOSTO mentre sei a 1 gamba (quanto è arrivato vicino alla sicurezza)
+  if (w.legs.length === 1 && f.oddsWindow === f.windowStart) {
+    const other = w.legs[0].side === 'Up' ? f.downAsk : f.upAsk;
+    if (other != null) w.otherMin = w.otherMin == null ? other : Math.min(w.otherMin, other);
+  }
 
   // strategia: solo con price-to-beat affidabile E quote del CICLO CORRENTE (no quote stantie)
   const oddsOk = f.oddsWindow === f.windowStart && f.upAsk != null && f.downAsk != null;
@@ -112,15 +118,20 @@ function onFeed(f) {
 
 function snapshot() {
   const arr = [...windows.values()].filter((w) => w.legs.length > 0).sort((a, b) => b.s - a.s).slice(0, 200);
-  return arr.map((w) => ({
-    s: w.s,
-    iso: new Date(w.s * 1000).toISOString().slice(11, 16),
-    priceToBeat: w.priceToBeat, priceToBeatReliable: w.priceToBeatReliable,
-    lastPrice: w.lastPrice, closePrice: w.closePrice, outcome: w.outcome,
-    distance: w.priceToBeat != null && w.lastPrice != null ? +(w.lastPrice - w.priceToBeat).toFixed(2) : null,
-    legs: w.legs.map((l) => ({ side: l.side, price: l.price, shares: l.shares, kind: l.kind, iso: new Date(l.t).toISOString().slice(11, 19) })),
-    status: w.status, gainIfUp: w.gainIfUp, gainIfDown: w.gainIfDown, minGain: w.minGain, maxGain: w.maxGain, actualGain: w.actualGain,
-  }));
+  return arr.map((w) => {
+    const entrata = w.legs.find((l) => l.kind === 'entrata') || w.legs[0];
+    const otherSide = entrata ? (entrata.side === 'Up' ? 'Down' : 'Up') : null; // lato della sicurezza
+    return {
+      s: w.s,
+      iso: new Date(w.s * 1000).toISOString().slice(11, 16),
+      priceToBeat: w.priceToBeat, priceToBeatReliable: w.priceToBeatReliable,
+      lastPrice: w.lastPrice, closePrice: w.closePrice, outcome: w.outcome,
+      distance: w.priceToBeat != null && w.lastPrice != null ? +(w.lastPrice - w.priceToBeat).toFixed(2) : null,
+      legs: w.legs.map((l) => ({ side: l.side, price: l.price, shares: l.shares, kind: l.kind, iso: new Date(l.t).toISOString().slice(11, 19) })),
+      status: w.status, gainIfUp: w.gainIfUp, gainIfDown: w.gainIfDown, minGain: w.minGain, maxGain: w.maxGain, actualGain: w.actualGain,
+      otherSide, otherMin: w.otherMin,
+    };
+  });
 }
 
 // statistiche cumulate sulle finestre chiuse con almeno una gamba
