@@ -85,7 +85,7 @@ function onFeed(f) {
     w = { s: f.windowStart, priceToBeat: f.priceToBeat, priceToBeatReliable: f.priceToBeatReliable,
       legs: [], lastPrice: f.currentPrice, lastUpAsk: null, lastDownAsk: null,
       closePrice: null, outcome: null, status: 'attesa',
-      gainIfUp: 0, gainIfDown: 0, minGain: 0, maxGain: 0, actualGain: null, upMin: null, downMin: null, maxDev: null, createdAt: Date.now() };
+      gainIfUp: 0, gainIfDown: 0, minGain: 0, maxGain: 0, actualGain: null, upMin: null, downMin: null, calmStart: null, createdAt: Date.now() };
     windows.set(f.windowStart, w);
   }
   // prendi sempre il price-to-beat affidabile (valore esatto al bordo dal buffer)
@@ -93,10 +93,13 @@ function onFeed(f) {
   else if (w.priceToBeat == null && f.priceToBeat != null) { w.priceToBeat = f.priceToBeat; }
   w.lastPrice = f.currentPrice; w.lastUpAsk = f.upAsk; w.lastDownAsk = f.downAsk;
 
-  // FILTRO range-bound: massima escursione dal target dall'apertura. Se "rompe" la banda -> trend -> scartata.
+  const rel = Math.floor((f.lastTs || Date.now()) / 1000) - f.windowStart; // secondi dentro la finestra
+  // FILTRO range-bound ROLLING: da quanti secondi il prezzo è CONTINUAMENTE entro ±BAND dal target.
+  // Se esce (breakout) la striscia si azzera; se rientra riparte da capo (altra chance di stabilizzarsi).
   if (w.priceToBeat != null && f.currentPrice != null) {
     const dev = Math.abs(f.currentPrice - w.priceToBeat);
-    if (w.maxDev == null || dev > w.maxDev) w.maxDev = dev;
+    if (dev <= BAND) { if (w.calmStart == null) w.calmStart = rel; }
+    else w.calmStart = null;
   }
 
   // traccia il MINIMO ask di ENTRAMBI i lati durante la finestra (sempre, 1 o 2 gambe)
@@ -108,12 +111,11 @@ function onFeed(f) {
   // strategia: solo con price-to-beat affidabile E quote del CICLO CORRENTE (no quote stantie)
   const oddsOk = f.oddsWindow === f.windowStart && f.upAsk != null && f.downAsk != null;
   if (w.priceToBeatReliable && w.priceToBeat != null && f.currentPrice != null && oddsOk) {
-    const rel = Math.floor((f.lastTs || Date.now()) / 1000) - f.windowStart; // secondi dentro la finestra
     const haveUp = w.legs.some((l) => l.side === 'Up');
     const haveDown = w.legs.some((l) => l.side === 'Down');
-    // FILTRO range-bound: prezzo MAI uscito da ±BAND (mai trend) E osservato per almeno MIN_OBS secondi
-    const rangeBound = w.maxDev != null && w.maxDev <= BAND;
-    if (w.legs.length === 0 && rangeBound && rel >= MIN_OBS && rel <= ENTRY_MAX_REL) {
+    // entra solo se range-bound CONTINUO da almeno MIN_OBS secondi (la striscia si azzera ai breakout)
+    const calmDur = w.calmStart != null ? (rel - w.calmStart) : -1;
+    if (w.legs.length === 0 && calmDur >= MIN_OBS && rel <= ENTRY_MAX_REL) {
       if (f.upAsk != null && f.upAsk < THRESH) buy(w, 'Up', f.upAsk, 'entrata', f);
       else if (f.downAsk != null && f.downAsk < THRESH) buy(w, 'Down', f.downAsk, 'entrata', f);
     } else if (w.legs.length === 1) {
