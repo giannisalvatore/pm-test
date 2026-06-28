@@ -24,6 +24,9 @@
   .pill { display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; border:1px solid var(--line); }
   .pill.up { color:var(--up); border-color:var(--up); } .pill.down { color:var(--down); border-color:var(--down); }
   .pill.lock { color:var(--acc); border-color:var(--acc); } .pill.wait { color:var(--mut); }
+  .pill.live { color:var(--acc); border-color:var(--acc); }
+  tr.liverow td { background:rgba(88,166,255,0.08); }
+  .cyc.live { border-color:var(--acc); }
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
   .leg { font-size:12px; }
   .tag { font-size:10px; color:var(--mut); }
@@ -120,8 +123,8 @@ async function load(){
     const sicur = w.legs.find(l=>l.kind==='sicurezza');
     let stPill = 'pill wait';
     if(w.status.includes('lock')) stPill='pill lock';
-    return `<tr>
-      <td class="l">${w.iso}${w.priceToBeatReliable?'':' <span class="tag warn">⚠</span>'}</td>
+    return `<tr class="${w.live?'liverow':''}">
+      <td class="l">${w.live?'<span class="pill live">● LIVE</span> ':''}${w.iso}${w.priceToBeatReliable?'':' <span class="tag warn">⚠</span>'}</td>
       <td>${f2(w.priceToBeat)}</td>
       <td>${f2(w.lastPrice)}</td>
       <td class="${w.distance!=null&&Math.abs(w.distance)<=p.band?'acc':'muted'}">${w.distance==null?'—':(w.distance>=0?'+':'')+f2(w.distance)}</td>
@@ -144,9 +147,9 @@ async function load(){
     const sicur = w.legs.find(l=>l.kind==='sicurezza');
     const closed = w.outcome!=null;
     let stPill='pill wait'; if(w.status.includes('lock'))stPill='pill lock';
-    return `<div class="cyc">
+    return `<div class="cyc${w.live?' live':''}">
       <div class="cyc-head">
-        <span class="t">${w.iso}${w.priceToBeatReliable?'':' ⚠'}</span>
+        <span class="t">${w.live?'● LIVE · ':''}${w.iso}${w.priceToBeatReliable?'':' ⚠'}</span>
         <span class="${stPill}">${w.status}</span>
         ${w.outcome?`<span class="pill ${w.outcome==='Up'?'up':'down'}" style="margin-left:auto">${w.outcome}</span>`:''}
       </div>

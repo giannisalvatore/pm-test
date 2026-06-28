@@ -45,8 +45,8 @@ function computeGains(w) {
 
 function setStatus(w) {
   if (w.closePrice != null) { w.status = w.legs.length === 0 ? 'saltata' : (w.legs.length === 2 ? 'lock chiusa' : 'nuda chiusa'); }
-  else if (w.legs.length === 0) w.status = 'attesa';
-  else if (w.legs.length === 1) w.status = 'entrata (1/2)';
+  else if (w.legs.length === 0) w.status = w.waitReason || 'attesa';
+  else if (w.legs.length === 1) w.status = 'entrata (1/2) · attendo l\'altro lato < ' + THRESH;
   else w.status = 'in sicurezza (lock)';
 }
 
@@ -104,11 +104,23 @@ function onFeed(f) {
 
   // strategia: solo con price-to-beat affidabile E quote del CICLO CORRENTE (no quote stantie)
   const oddsOk = f.oddsWindow === f.windowStart && f.upAsk != null && f.downAsk != null;
+  const volOk = f.rv15 != null && f.rv15 >= RV_MIN; // regime volatile -> finestre che oscillano
+
+  // motivo per cui la finestra (senza entrata) non sta ancora comprando — mostrato in tabella
+  if (w.legs.length === 0) {
+    const rv = f.rv15 != null ? Math.round(f.rv15) : '—';
+    const noSide = !(f.upAsk != null && f.upAsk < THRESH) && !(f.downAsk != null && f.downAsk < THRESH);
+    if (!w.priceToBeatReliable || w.priceToBeat == null) w.waitReason = 'attendo price-to-beat affidabile';
+    else if (!oddsOk) w.waitReason = 'attendo quote del ciclo';
+    else if (rel > ENTRY_MAX_REL) w.waitReason = 'entrata chiusa (oltre 2,5 min)';
+    else if (!volOk) w.waitReason = `troppo calmo: vol ${rv}$ < ${RV_MIN}$ (aspetto volatilità)`;
+    else if (noSide) w.waitReason = `volatile ✓ ma nessun lato < ${THRESH} (Up ${f.upAsk != null ? f.upAsk.toFixed(2) : '—'} · Down ${f.downAsk != null ? f.downAsk.toFixed(2) : '—'})`;
+    else w.waitReason = 'condizioni ok → entro';
+  }
+
   if (w.priceToBeatReliable && w.priceToBeat != null && f.currentPrice != null && oddsOk) {
     const haveUp = w.legs.some((l) => l.side === 'Up');
     const haveDown = w.legs.some((l) => l.side === 'Down');
-    // FILTRO: entra solo in regime VOLATILE — finestre con alta vol recente oscillano di piu' (-> lock).
-    const volOk = f.rv15 != null && f.rv15 >= RV_MIN;
     if (w.legs.length === 0 && volOk && rel <= ENTRY_MAX_REL) {
       if (f.upAsk != null && f.upAsk < THRESH) buy(w, 'Up', f.upAsk, 'entrata', f);
       else if (f.downAsk != null && f.downAsk < THRESH) buy(w, 'Down', f.downAsk, 'entrata', f);
@@ -121,9 +133,11 @@ function onFeed(f) {
 }
 
 function snapshot() {
-  const arr = [...windows.values()].filter((w) => w.legs.length > 0).sort((a, b) => b.s - a.s).slice(0, 200);
+  // mostra le finestre con entrata + SEMPRE la finestra corrente (anche senza entrata, per vedere cosa aspetta)
+  const arr = [...windows.values()].filter((w) => w.legs.length > 0 || w.s === currentS).sort((a, b) => b.s - a.s).slice(0, 200);
   return arr.map((w) => ({
     s: w.s,
+    live: w.s === currentS && w.closePrice == null,
     iso: new Date(w.s * 1000).toISOString().slice(11, 16),
     priceToBeat: w.priceToBeat, priceToBeatReliable: w.priceToBeatReliable,
     lastPrice: w.lastPrice, closePrice: w.closePrice, outcome: w.outcome,
