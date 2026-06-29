@@ -9,6 +9,9 @@
  *   finestra corrente; al cambio finestra resubscribe ai nuovi token.
  */
 
+const path = require('path');
+const fs = require('fs');
+
 const GAMMA = 'https://gamma-api.polymarket.com';
 const PRICE_WS = 'wss://ws-live-data.polymarket.com';
 const BOOK_WS = 'wss://ws-subscriptions-clob.polymarket.com/ws/market';
@@ -177,6 +180,23 @@ async function bookManager() {
   setTimeout(bookManager, 1500);
 }
 
-function start() { connectPriceWS(); bookManager(); }
+// all'avvio: ricarica gli ultimi ~25 min di tick dal recorder (data/ticks.db) -> rv15 pronto subito
+function backfillFromTickDB() {
+  try {
+    const { DatabaseSync } = require('node:sqlite');
+    const p = path.join(__dirname, 'data', 'ticks.db');
+    if (!fs.existsSync(p)) { console.log('backfill: ticks.db non trovato (recorder non avviato?) — riscaldamento normale ~15min'); return; }
+    const tdb = new DatabaseSync(p, { readOnly: true });
+    const since = Date.now() - 25 * 60 * 1000;
+    const rows = tdb.prepare('SELECT ts, value FROM ticks WHERE ts >= ? ORDER BY ts').all(since);
+    tdb.close();
+    for (const r of rows) addTick(r.ts, r.value);
+    if (rows.length) { const last = rows[rows.length - 1]; state.currentPrice = last.value; state.lastTs = last.ts; }
+    prune(); recompute();
+    console.log(`backfill: caricati ${rows.length} tick da ticks.db · rv15 ${state.rv15 != null ? '$' + state.rv15.toFixed(0) + ' (pronto)' : 'ancora in attesa'}`);
+  } catch (e) { console.error('backfill ticks.db:', e.message); }
+}
 
-module.exports = { state, onUpdate, start, priceAt, WIN };
+function start() { backfillFromTickDB(); connectPriceWS(); bookManager(); }
+
+module.exports = { state, onUpdate, start, priceAt, WIN, backfillFromTickDB };

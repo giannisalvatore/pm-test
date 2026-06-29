@@ -3,6 +3,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "start": "node --experimental-sqlite --no-warnings server.js"
+    "start": "node --experimental-sqlite --no-warnings server.js",
+    "rec": "node --experimental-sqlite --no-warnings recorder.js"
   }
 }
