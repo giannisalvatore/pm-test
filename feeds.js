@@ -44,17 +44,27 @@ function priceAt(tsMs) {
   return best;
 }
 
-// volatilita' realizzata sugli ultimi `ms`: sqrt(somma dei (delta tra tick consecutivi)^2).
-// Serve copertura sufficiente del periodo, altrimenti null (non si filtra finche' non c'e' storia).
+// volatilita' realizzata sugli ultimi `ms`: somma dei (delta)^2 su una griglia a 1 prezzo/SECONDO.
+// IMPORTANTE: ricampiona a 1/sec (riempiendo i buchi con l'ultimo prezzo noto) per stare sulla STESSA
+// scala del backtest (barre 1s) — i tick Chainlink dal vivo arrivano a cadenza variabile.
+// Parte appena c'e' ~15 min di STORIA (non serve un numero minimo di tick grezzi).
 function realizedVol(ms) {
   const now = state.lastTs || Date.now();
-  const cutoff = now - ms;
-  const pts = [];
-  for (const [ts, v] of buffer) if (ts >= cutoff && typeof v === 'number') pts.push([ts, v]);
-  if (pts.length < (ms / 1000) * 0.5) return null; // serve almeno ~meta' dei secondi
-  pts.sort((a, b) => a[0] - b[0]);
-  let sq = 0;
-  for (let i = 1; i < pts.length; i++) { const d = pts[i][1] - pts[i - 1][1]; sq += d * d; }
+  const startMs = now - ms;
+  const entries = [];
+  for (const [ts, v] of buffer) if (typeof v === 'number') entries.push([ts, v]);
+  if (entries.length < 2) return null;
+  entries.sort((a, b) => a[0] - b[0]);
+  if (entries[0][0] > startMs + 60 * 1000) return null; // la storia non arriva ancora indietro ~15 min
+  // griglia a 1/sec con forward-fill (ultimo prezzo noto <= t)
+  let idx = 0, last = null, prev = null, sq = 0, n = 0;
+  for (let t = startMs; t <= now; t += 1000) {
+    while (idx < entries.length && entries[idx][0] <= t) { last = entries[idx][1]; idx++; }
+    if (last == null) continue;
+    if (prev != null) { const d = last - prev; sq += d * d; n++; }
+    prev = last;
+  }
+  if (n < (ms / 1000) * 0.5) return null; // griglia troppo vuota (poca storia)
   return Math.sqrt(sq);
 }
 
